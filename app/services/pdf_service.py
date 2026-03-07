@@ -414,6 +414,7 @@ class PdfService(BaseService):
 
         tabla = Table(data, colWidths=[3.2 * inch, 1.4 * inch, 1.4 * inch])
         tabla.setStyle(self._tabla_estilo_base(AZUL_OSCURO))
+        tabla.repeatRows = 1
         elems.append(tabla)
         elems.append(Spacer(1, 6))
         elems.append(self._seccion_divider())
@@ -432,9 +433,9 @@ class PdfService(BaseService):
         ))
 
         for col, info in frecuencias.items():
-            elems.append(Paragraph(
+            subtitulo = Paragraph(
                 f"▸ Columna: <b>{col}</b>", self._styles["SubtituloSeccion"]
-            ))
+            )
 
             abs_dict = info.get("absoluta", {})
             rel_dict = info.get("relativa", {})
@@ -449,7 +450,9 @@ class PdfService(BaseService):
 
             tabla = Table(data, colWidths=[2.8 * inch, 1.5 * inch, 1.5 * inch])
             tabla.setStyle(self._tabla_estilo_base(AZUL_CLARO))
-            elems.append(tabla)
+            tabla.repeatRows = 1
+            # Mantener subtítulo + primeras filas juntos para evitar cortes
+            elems.append(KeepTogether([subtitulo, tabla]))
             elems.append(Spacer(1, 8))
 
         elems.append(self._seccion_divider())
@@ -468,9 +471,9 @@ class PdfService(BaseService):
         ))
 
         for col, stats in estadisticas.items():
-            elems.append(Paragraph(
+            subtitulo = Paragraph(
                 f"▸ Columna: <b>{col}</b>", self._styles["SubtituloSeccion"]
-            ))
+            )
 
             data = [
                 ["Estadístico", "Valor"],
@@ -488,8 +491,8 @@ class PdfService(BaseService):
             estilo = self._tabla_estilo_base(AZUL_MEDIO)
             estilo.add("ALIGN", (0, 1), (0, -1), "LEFT")
             tabla.setStyle(estilo)
-            elems.append(tabla)
-            elems.append(Spacer(1, 8))
+            tabla.repeatRows = 1
+            elems.append(KeepTogether([subtitulo, tabla, Spacer(1, 8)]))
 
         elems.append(self._seccion_divider())
         return elems
@@ -501,7 +504,10 @@ class PdfService(BaseService):
         if not contingencia:
             return elems
 
-        elems.append(Paragraph("5. Tabla de Contingencia", self._styles["Subtitulo"]))
+        subtitulo = Paragraph(
+            '<font color="#d4ac0d">■</font>  5. Tabla de Contingencia',
+            self._styles["Subtitulo"]
+        )
 
         # Reconstruir la tabla cruzada desde el dict
         # contingencia = { col2_val: { col1_val: count, ... }, ... }
@@ -540,6 +546,8 @@ class PdfService(BaseService):
             ("TOPPADDING",    (0, 0), (-1, -1), 2),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
         ]))
+        tabla.repeatRows = 1
+        elems.append(subtitulo)
         elems.append(tabla)
         elems.append(Spacer(1, 10))
         return elems
@@ -560,13 +568,12 @@ class PdfService(BaseService):
 
         for ruta in graficos_validos:
             nombre = os.path.basename(ruta).replace(".png", "").replace("_", " ").title()
-            elems.append(Paragraph(
+            subtitulo = Paragraph(
                 f"▸ <b>{nombre}</b>", self._styles["SubtituloSeccion"]
-            ))
+            )
             img = Image(ruta, width=6.2 * inch, height=2.6 * inch)
             img.hAlign = "CENTER"
-            elems.append(img)
-            elems.append(Spacer(1, 14))
+            elems.append(KeepTogether([subtitulo, img, Spacer(1, 14)]))
 
         return elems
 
@@ -599,10 +606,10 @@ class PdfService(BaseService):
         elems.append(Spacer(1, 10))
 
         # ── Tabla resumen de outliers ──
-        elems.append(Paragraph(
+        subtitulo_resumen = Paragraph(
             f"▸ Resumen del tratamiento (método: <b>{metodo}</b>)",
             self._styles["SubtituloSeccion"]
-        ))
+        )
 
         data = [["Columna", "Outliers", "Valor Reemplazo", "Lím. Inferior", "Lím. Superior", "IQR"]]
         for col, info in reporte.items():
@@ -622,7 +629,8 @@ class PdfService(BaseService):
         ancho_col = 6.5 * inch / 6
         tabla = Table(data, colWidths=[ancho_col] * 6)
         tabla.setStyle(self._tabla_estilo_base(AZUL_OSCURO))
-        elems.append(tabla)
+        tabla.repeatRows = 1
+        elems.append(KeepTogether([subtitulo_resumen, tabla]))
         elems.append(Spacer(1, 12))
 
         # ── Gráficos comparativos antes/después ──
@@ -635,13 +643,12 @@ class PdfService(BaseService):
 
             for ruta in graficos_validos:
                 nombre = os.path.basename(ruta).replace(".png", "").replace("_", " ").title()
-                elems.append(Paragraph(
+                subtitulo_graf = Paragraph(
                     f"<b>{nombre}</b>", self._styles["SubtituloSeccion"]
-                ))
+                )
                 img = Image(ruta, width=6.2 * inch, height=2.8 * inch)
                 img.hAlign = "CENTER"
-                elems.append(img)
-                elems.append(Spacer(1, 10))
+                elems.append(KeepTogether([subtitulo_graf, img, Spacer(1, 10)]))
 
         elems.append(self._seccion_divider())
         return elems
