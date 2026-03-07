@@ -501,13 +501,21 @@ class PdfService(BaseService):
         """Sección de tabla de contingencia."""
         elems = []
         contingencia = resultados.get("contingencia", {})
-        if not contingencia:
-            return elems
 
         subtitulo = Paragraph(
             '<font color="#d4ac0d">■</font>  5. Tabla de Contingencia',
             self._styles["Subtitulo"]
         )
+
+        if not contingencia:
+            elems.append(subtitulo)
+            elems.append(Paragraph(
+                "No se generó tabla de contingencia porque no se indicaron "
+                "al menos dos columnas cualitativas.",
+                self._styles["Cuerpo"]
+            ))
+            elems.append(Spacer(1, 10))
+            return elems
 
         # Reconstruir la tabla cruzada desde el dict
         # contingencia = { col2_val: { col1_val: count, ... }, ... }
