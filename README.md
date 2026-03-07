@@ -1,3 +1,12 @@
+---
+title: API Analisis Exploratorio
+emoji: 📊
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+pinned: false
+---
+
 # API Análisis Exploratorio
 
 API REST construida con **FastAPI** + **PostgreSQL (Neon)** para ejecutar Análisis Exploratorio de Datos (EDA) sobre datasets públicos.
