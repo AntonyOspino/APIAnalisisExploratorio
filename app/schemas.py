@@ -59,6 +59,7 @@ class ColumnasResponse(BaseModel):
     columnas: List[str]                  # todas las columnas
     cuantitativas: List[str]             # columnas numéricas (int, float)
     cualitativas: List[str]              # columnas categóricas (object, string, bool)
+    identidad: List[str] = []            # columnas de identidad detectadas (excluidas de cuant/cual)
 
 
 class EstadoResponse(BaseModel):

@@ -278,6 +278,13 @@ class CorreoService(BaseService):
         # Gráficos
         items.append("✅ Gráficos de distribución y frecuencia")
 
+        # Columnas de identidad
+        identidad = resultados.get("identidad", [])
+        if identidad:
+            items.append(f"🔑 Columnas de identidad excluidas: {', '.join(identidad)}")
+        else:
+            items.append("ℹ️ No se detectaron columnas de identidad")
+
         # Outliers
         if outliers_data:
             items.append(f"✅ Tratamiento de outliers (método: {outliers_data.get('metodo', '?')})")

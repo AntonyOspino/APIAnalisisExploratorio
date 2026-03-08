@@ -57,15 +57,22 @@ class DatosService(BaseService):
             self._handle_error(e, "Error al cargar el dataset")
 
     async def obtener_columnas(self) -> dict:
-        """Retorna columnas del DataFrame clasificadas en cuantitativas y cualitativas."""
+        """Retorna columnas del DataFrame clasificadas en cuantitativas, cualitativas e identidad."""
         try:
             self._verificar_df_cargado()
             cuantitativas = self.df.select_dtypes(include=["number"]).columns.tolist()
             cualitativas = self.df.select_dtypes(exclude=["number"]).columns.tolist()
+
+            # Detectar columnas de identidad y excluirlas de cuant/cual
+            identidad = [c for c in self.df.columns if self._es_columna_identidad(self.df, c)]
+            cuantitativas = [c for c in cuantitativas if c not in identidad]
+            cualitativas = [c for c in cualitativas if c not in identidad]
+
             return {
                 "columnas": self.df.columns.tolist(),
                 "cuantitativas": cuantitativas,
-                "cualitativas": cualitativas
+                "cualitativas": cualitativas,
+                "identidad": identidad,
             }
         except Exception as e:
             self._handle_error(e, "Error al obtener columnas")
@@ -116,6 +123,53 @@ class DatosService(BaseService):
 
         self.logger.info(f"Dataset guardado en Neon con ID: {nuevo.id}")
         return nuevo.id
+
+    @staticmethod
+    def _es_columna_identidad(df: pd.DataFrame, col: str) -> bool:
+        """Detecta si una columna es de identidad (ID, índice, código único)."""
+        import re
+
+        nombre = col.strip().lower()
+
+        # Patrones de nombre típicos de columnas de identidad (PK, índice propio).
+        # NO incluye patrones tipo *_id (ej: user_id, country_id) porque esos
+        # suelen ser foreign keys que sí aportan valor categórico al análisis.
+        patrones_nombre = (
+            r'^id$',             # "id", "ID"
+            r'^_?id$',           # "_id"
+            r'^id_',             # "id_cliente", "id_registro"
+            r'^index$',          # "index"
+            r'^(pk|key)$',       # "pk", "key"
+            r'^row',             # "row", "row_number"
+            r'^#$',              # "#"
+            r'^(unnamed|sin_nombre)',  # columnas auto-generadas por pandas
+        )
+
+        # Si el nombre coincide con un patrón → identidad
+        if any(re.match(p, nombre) for p in patrones_nombre):
+            return True
+
+        # Análisis por datos: solo considerar columnas enteras
+        serie = df[col].dropna()
+        if len(serie) == 0:
+            return False
+
+        # Solo evaluar numéricas enteras
+        if not pd.api.types.is_integer_dtype(df[col]):
+            return False
+
+        # Criterio: valores únicos Y secuenciales (o casi)
+        n_unicos = serie.nunique()
+        n_total = len(serie)
+        ratio_unicidad = n_unicos / n_total if n_total > 0 else 0
+
+        # Si todos (o >95%) son únicos + van de forma secuencial
+        if ratio_unicidad > 0.95:
+            diff = serie.sort_values().diff().dropna()
+            if len(diff) > 0 and (diff == 1).mean() > 0.9:
+                return True
+
+        return False
 
     def _verificar_df_cargado(self):
         """Verifica que haya un DataFrame en memoria."""

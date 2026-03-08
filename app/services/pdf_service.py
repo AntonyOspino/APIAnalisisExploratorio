@@ -476,7 +476,17 @@ class PdfService(BaseService):
             "observacion": "Generados para cada columna seleccionada",
         })
 
-        # 7. Outliers
+        # 7. Columnas de identidad
+        identidad = resultados.get("identidad", [])
+        items.append({
+            "nombre": "Detección de columnas de identidad",
+            "realizado": bool(identidad),
+            "observacion": (
+                f"Excluidas del análisis: {', '.join(identidad)}"
+            ) if identidad else "No se detectaron columnas de identidad",
+        })
+
+        # 8. Outliers
         items.append({
             "nombre": "Tratamiento de outliers",
             "realizado": bool(outliers_data),

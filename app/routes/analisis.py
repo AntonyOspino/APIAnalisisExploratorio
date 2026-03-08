@@ -40,6 +40,11 @@ async def ejecutar_analisis(
         cols_cual=request.columnas_cualitativas
     )
 
+    # Guardar columnas de identidad detectadas en los resultados
+    identidad = [c for c in datos_service.df.columns
+                 if DatosService._es_columna_identidad(datos_service.df, c)]
+    service.resultados["identidad"] = identidad
+
     # Guardar el service para que /pdf/generar pueda acceder a resultados y gráficos
     _analisis_service_cache["ultima"] = service
 
