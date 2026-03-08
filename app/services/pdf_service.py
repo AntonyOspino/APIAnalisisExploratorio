@@ -235,6 +235,9 @@ class PdfService(BaseService):
         # ── Encabezado ──
         elementos += self._seccion_encabezado(dataset)
 
+        # ── Resumen de análisis realizados ──
+        elementos += self._seccion_resumen_analisis(resultados, outliers_data)
+
         # ── Interpretación general ──
         elementos += self._seccion_interpretacion(resultados)
 
@@ -374,6 +377,115 @@ class PdfService(BaseService):
         elems.append(Spacer(1, 8))
         elems.append(self._seccion_divider())
         return elems
+
+    def _seccion_resumen_analisis(self, resultados: dict, outliers_data: dict = None) -> list:
+        """Sección que indica qué análisis se realizaron y cuáles no."""
+        elems = []
+
+        elems.append(Paragraph(
+            '<font color="#d4ac0d">■</font>  Resumen de Análisis Realizados',
+            self._styles["Subtitulo"]
+        ))
+
+        analisis_items = self._construir_resumen_analisis(resultados, outliers_data)
+
+        data = [
+            [Paragraph("<b>Análisis</b>", self._styles["CeldaTablaHeader"]),
+             Paragraph("<b>Estado</b>", self._styles["CeldaTablaHeader"]),
+             Paragraph("<b>Observación</b>", self._styles["CeldaTablaHeader"])]
+        ]
+
+        for item in analisis_items:
+            estado_color = "#27ae60" if item["realizado"] else "#e74c3c"
+            estado_texto = "Realizado" if item["realizado"] else "No realizado"
+            data.append([
+                Paragraph(item["nombre"], self._styles["CeldaTabla"]),
+                Paragraph(
+                    f'<font color="{estado_color}"><b>{estado_texto}</b></font>',
+                    self._styles["CeldaTabla"]
+                ),
+                Paragraph(item["observacion"], self._styles["CeldaTabla"]),
+            ])
+
+        tabla = Table(data, colWidths=[2.2 * inch, 1.2 * inch, 3.1 * inch])
+        tabla.setStyle(self._tabla_estilo_base(AZUL_OSCURO))
+        tabla.repeatRows = 1
+        elems.append(tabla)
+        elems.append(Spacer(1, 6))
+        elems.append(self._seccion_divider())
+        return elems
+
+    def _construir_resumen_analisis(self, resultados: dict, outliers_data: dict = None) -> list:
+        """Construye la lista de análisis con su estado. Reutilizado por PDF y correo."""
+        items = []
+
+        # 1. Valores nulos
+        nulos = resultados.get("nulos", {})
+        items.append({
+            "nombre": "Análisis de valores nulos",
+            "realizado": bool(nulos),
+            "observacion": f"{len(nulos)} columnas analizadas" if nulos
+                           else "No se ejecutó el análisis de nulos",
+        })
+
+        # 2. Limpieza de datos
+        limpieza = resultados.get("limpieza", {})
+        items.append({
+            "nombre": "Limpieza de datos",
+            "realizado": bool(limpieza),
+            "observacion": (
+                f"De {limpieza.get('filas_antes', '?')} a "
+                f"{limpieza.get('filas_despues', '?')} filas"
+            ) if limpieza else "No se ejecutó la limpieza",
+        })
+
+        # 3. Tablas de frecuencia
+        frecuencias = resultados.get("frecuencias", {})
+        items.append({
+            "nombre": "Tablas de frecuencia",
+            "realizado": bool(frecuencias),
+            "observacion": f"{len(frecuencias)} columnas cualitativas analizadas" if frecuencias
+                           else "No se seleccionaron columnas cualitativas",
+        })
+
+        # 4. Estadísticas descriptivas
+        estadisticas = resultados.get("estadisticas", {})
+        items.append({
+            "nombre": "Estadísticas descriptivas",
+            "realizado": bool(estadisticas),
+            "observacion": f"{len(estadisticas)} columnas cuantitativas analizadas" if estadisticas
+                           else "No se seleccionaron columnas cuantitativas",
+        })
+
+        # 5. Tabla de contingencia
+        contingencia = resultados.get("contingencia", {})
+        items.append({
+            "nombre": "Tabla de contingencia",
+            "realizado": bool(contingencia),
+            "observacion": (
+                f"Cruce entre '{contingencia.get('variable_fila', '?')}' y "
+                f"'{contingencia.get('variable_columna', '?')}'"
+            ) if contingencia else "Se requieren al menos 2 columnas cualitativas",
+        })
+
+        # 6. Gráficos
+        interpretacion = resultados.get("interpretacion", [])
+        items.append({
+            "nombre": "Gráficos de distribución",
+            "realizado": True,
+            "observacion": "Generados para cada columna seleccionada",
+        })
+
+        # 7. Outliers
+        items.append({
+            "nombre": "Tratamiento de outliers",
+            "realizado": bool(outliers_data),
+            "observacion": (
+                f"Método: {outliers_data.get('metodo', '?')}"
+            ) if outliers_data else "No se solicitó tratamiento de outliers",
+        })
+
+        return items
 
     def _seccion_interpretacion(self, resultados: dict) -> list:
         """Sección de interpretación general con mensajes concatenados."""
@@ -517,42 +629,68 @@ class PdfService(BaseService):
             elems.append(Spacer(1, 10))
             return elems
 
+        # Extraer metadata y tabla
+        tabla_dict = contingencia.get("tabla", contingencia)
+        var_fila = contingencia.get("variable_fila", "")
+        var_columna = contingencia.get("variable_columna", "")
+
         # Reconstruir la tabla cruzada desde el dict
-        # contingencia = { col2_val: { col1_val: count, ... }, ... }
-        col2_vals = list(contingencia.keys())
+        col2_vals = list(tabla_dict.keys())
         col1_vals = set()
-        for inner in contingencia.values():
+        for inner in tabla_dict.values():
             col1_vals.update(inner.keys())
         col1_vals = sorted(col1_vals, key=str)
-
-        # Encabezado
-        data = [[""] + [str(v) for v in col2_vals]]
-        for c1 in col1_vals:
-            fila = [str(c1)]
-            for c2 in col2_vals:
-                fila.append(str(contingencia[c2].get(c1, 0)))
-            data.append(fila)
 
         # Calcular anchos dinámicos
         n_cols = len(col2_vals) + 1
         ancho_disponible = 6.5 * inch
-        ancho_col = ancho_disponible / n_cols
-        col_widths = [ancho_col] * n_cols
+        ancho_primera = max(1.2 * inch, ancho_disponible * 0.22)
+        ancho_resto = (ancho_disponible - ancho_primera) / max(len(col2_vals), 1)
+        col_widths = [ancho_primera] + [ancho_resto] * len(col2_vals)
+
+        # Encabezado con nombre de variable en la primera celda (wrapping para textos largos)
+        header_style = self._styles["CeldaTablaHeader"]
+        cell_style = self._styles["CeldaTabla"]
+
+        header_row = [Paragraph(f"<b>{var_fila} \\ {var_columna}</b>", header_style)]
+        for v in col2_vals:
+            header_row.append(Paragraph(f"<b>{str(v)}</b>", header_style))
+
+        data = [header_row]
+        for c1 in col1_vals:
+            fila = [Paragraph(f"<b>{str(c1)}</b>", ParagraphStyle(
+                "CeldaContingencia",
+                parent=cell_style,
+                fontName="Helvetica-Bold",
+                textColor=colors.white,
+                alignment=TA_CENTER,
+            ))]
+            for c2 in col2_vals:
+                fila.append(Paragraph(str(tabla_dict[c2].get(c1, 0)), cell_style))
+            data.append(fila)
 
         tabla = Table(data, colWidths=col_widths)
         tabla.setStyle(TableStyle([
-            ("BACKGROUND",    (0, 0), (-1, 0), colors.HexColor("#1a3c6e")),
-            ("BACKGROUND",    (0, 0), (0, -1), colors.HexColor("#1a3c6e")),
-            ("TEXTCOLOR",     (0, 0), (-1, 0), colors.white),
-            ("TEXTCOLOR",     (0, 0), (0, -1), colors.white),
-            ("FONTNAME",      (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTNAME",      (0, 0), (0, -1), "Helvetica-Bold"),
-            ("FONTSIZE",      (0, 0), (-1, -1), 7),
-            ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
-            ("GRID",          (0, 0), (-1, -1), 0.5, colors.HexColor("#cccccc")),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f0f4fa")]),
-            ("TOPPADDING",    (0, 0), (-1, -1), 2),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            # Encabezado superior (fila 0)
+            ("BACKGROUND",     (0, 0), (-1, 0), AZUL_OSCURO),
+            ("TEXTCOLOR",      (0, 0), (-1, 0), colors.white),
+            ("FONTNAME",       (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE",       (0, 0), (-1, 0), 7),
+            # Primera columna (encabezados de fila)
+            ("BACKGROUND",     (0, 1), (0, -1), AZUL_MEDIO),
+            ("TEXTCOLOR",      (0, 1), (0, -1), colors.white),
+            ("FONTNAME",       (0, 1), (0, -1), "Helvetica-Bold"),
+            ("FONTSIZE",       (0, 1), (0, -1), 7),
+            # Celdas de datos
+            ("FONTSIZE",       (1, 1), (-1, -1), 7),
+            ("ALIGN",          (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN",         (0, 0), (-1, -1), "MIDDLE"),
+            ("GRID",           (0, 0), (-1, -1), 0.5, GRIS_BORDE),
+            ("ROWBACKGROUNDS", (1, 1), (-1, -1), [colors.white, AZUL_SUAVE]),
+            ("TOPPADDING",     (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING",  (0, 0), (-1, -1), 4),
+            ("LEFTPADDING",    (0, 0), (-1, -1), 3),
+            ("RIGHTPADDING",   (0, 0), (-1, -1), 3),
         ]))
         tabla.repeatRows = 1
         elems.append(subtitulo)

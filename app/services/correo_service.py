@@ -36,7 +36,8 @@ class CorreoService(BaseService):
     # ─── MÉTODO PÚBLICO PRINCIPAL ────────────────────────────────────────────
 
     async def enviar_informe(self, informe_id: int, correo_destino: str,
-                              sesion_id: int) -> dict:
+                              sesion_id: int, resultados: dict = None,
+                              outliers_data: dict = None) -> dict:
         """
         Envía el PDF adjunto al correo del usuario.
         Obtiene el nombre del usuario a partir de la sesión.
@@ -82,6 +83,8 @@ class CorreoService(BaseService):
                 destino=correo_destino,
                 nombre=nombre_completo,
                 ruta_pdf=informe.ruta_pdf,
+                resultados=resultados,
+                outliers_data=outliers_data,
             )
 
             # Actualizar estado en BD
@@ -113,7 +116,8 @@ class CorreoService(BaseService):
 
     # ─── MÉTODO PRIVADO — ENVÍO SMTP ────────────────────────────────────────
 
-    def _enviar_smtp(self, destino: str, nombre: str, ruta_pdf: str):
+    def _enviar_smtp(self, destino: str, nombre: str, ruta_pdf: str,
+                     resultados: dict = None, outliers_data: dict = None):
         """Construye y envía el email con el PDF adjunto."""
 
         if not self.smtp_email or not self.smtp_password:
@@ -179,14 +183,9 @@ class CorreoService(BaseService):
                 El documento PDF se encuentra adjunto a este correo para su revisión.
               </p>
               <div class="info-box">
-                <h3>📋 Contenido del informe</h3>
+                <h3>📋 Análisis realizados</h3>
                 <ul>
-                  <li>Interpretación general del conjunto de datos</li>
-                  <li>Análisis de valores nulos y limpieza de datos</li>
-                  <li>Tablas de frecuencia por variable cualitativa</li>
-                  <li>Estadísticas descriptivas por variable cuantitativa</li>
-                  <li>Tabla de contingencia entre variables</li>
-                  <li>Gráficos de distribución y frecuencia</li>
+{self._generar_lista_analisis_html(resultados, outliers_data)}
                 </ul>
               </div>
               <p>
@@ -226,3 +225,63 @@ class CorreoService(BaseService):
             server.starttls()
             server.login(self.smtp_email, self.smtp_password)
             server.send_message(msg)
+
+    def _generar_lista_analisis_html(self, resultados: dict = None,
+                                      outliers_data: dict = None) -> str:
+        """Genera las líneas <li> con el resumen de análisis para el email HTML."""
+        if not resultados:
+            return (
+                "                  <li>Interpretación general del conjunto de datos</li>\n"
+                "                  <li>Análisis de valores nulos y limpieza de datos</li>\n"
+                "                  <li>Tablas de frecuencia por variable cualitativa</li>\n"
+                "                  <li>Estadísticas descriptivas por variable cuantitativa</li>\n"
+                "                  <li>Gráficos de distribución y frecuencia</li>"
+            )
+
+        items = []
+
+        # Valores nulos
+        nulos = resultados.get("nulos", {})
+        if nulos:
+            items.append("✅ Análisis de valores nulos")
+        else:
+            items.append("❌ Análisis de valores nulos — no ejecutado")
+
+        # Limpieza
+        limpieza = resultados.get("limpieza", {})
+        if limpieza:
+            items.append("✅ Limpieza de datos")
+        else:
+            items.append("❌ Limpieza de datos — no ejecutada")
+
+        # Frecuencias
+        frecuencias = resultados.get("frecuencias", {})
+        if frecuencias:
+            items.append(f"✅ Tablas de frecuencia ({len(frecuencias)} columnas)")
+        else:
+            items.append("❌ Tablas de frecuencia — sin columnas cualitativas")
+
+        # Estadísticas
+        estadisticas = resultados.get("estadisticas", {})
+        if estadisticas:
+            items.append(f"✅ Estadísticas descriptivas ({len(estadisticas)} columnas)")
+        else:
+            items.append("❌ Estadísticas descriptivas — sin columnas cuantitativas")
+
+        # Contingencia
+        contingencia = resultados.get("contingencia", {})
+        if contingencia:
+            items.append("✅ Tabla de contingencia")
+        else:
+            items.append("❌ Tabla de contingencia — se requieren al menos 2 columnas cualitativas")
+
+        # Gráficos
+        items.append("✅ Gráficos de distribución y frecuencia")
+
+        # Outliers
+        if outliers_data:
+            items.append(f"✅ Tratamiento de outliers (método: {outliers_data.get('metodo', '?')})")
+        else:
+            items.append("❌ Tratamiento de outliers — no solicitado")
+
+        return "\n".join(f"                  <li>{item}</li>" for item in items)

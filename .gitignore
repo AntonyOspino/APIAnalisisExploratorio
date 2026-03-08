@@ -7,3 +7,7 @@ __pycache__/
 test_conn.py
 graficos/*.png
 Informes/*.pdf
+test_final.py
+test_all_changes.py
+test_endpoints.py
+test_no_contingencia.py

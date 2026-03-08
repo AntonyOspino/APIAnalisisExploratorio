@@ -78,15 +78,25 @@ class DatosService(BaseService):
 
     def _descargar_df(self, url: str, tipo: str) -> pd.DataFrame:
         """Descarga el archivo y lo convierte a DataFrame — sincrónico."""
-        respuesta = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+        respuesta = requests.get(
+            url,
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=30,
+            allow_redirects=True,
+        )
         respuesta.raise_for_status()
 
         if tipo == "csv":
-            return pd.read_csv(io.StringIO(respuesta.text))
-        elif tipo == "xlsx":
-            return pd.read_excel(io.BytesIO(respuesta.content))
+            df = pd.read_csv(io.StringIO(respuesta.text))
+        elif tipo in ("xlsx", "xls"):
+            engine = "xlrd" if tipo == "xls" else "openpyxl"
+            df = pd.read_excel(io.BytesIO(respuesta.content), engine=engine)
         else:
-            raise ValueError(f"Tipo no soportado: '{tipo}'. Use 'csv' o 'xlsx'")
+            raise ValueError(f"Tipo no soportado: '{tipo}'. Use 'csv', 'xlsx' o 'xls'")
+
+        # Limpia nombres de columnas: elimina espacios al inicio/final
+        df.columns = df.columns.str.strip()
+        return df
 
     async def _guardar_dataset(self, sesion_id, url, tipo,
                                 filas, columnas, cols_json, tiene_nulos) -> int:

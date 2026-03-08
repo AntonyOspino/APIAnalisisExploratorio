@@ -1,6 +1,7 @@
 # app/services/analisis_service.py
 
 import os
+import re
 import json
 import matplotlib
 matplotlib.use("Agg")  # evita errores de GUI en servidor — debe ir antes de importar pyplot
@@ -248,7 +249,12 @@ class AnalisisService(BaseService):
         tabla = pd.crosstab(df[col1], df[col2])
 
         # Convierte a dict anidado para serialización JSON
-        return tabla.to_dict()
+        # Incluye nombres de las variables para el PDF
+        return {
+            "tabla": tabla.to_dict(),
+            "variable_fila": col1,
+            "variable_columna": col2,
+        }
 
     # ─── MÉTODOS PRIVADOS — GRÁFICOS ─────────────────────────────────────────
 
@@ -285,8 +291,8 @@ class AnalisisService(BaseService):
 
         plt.tight_layout()
 
-        # Nombre del archivo — reemplaza espacios por guiones bajos
-        ruta = os.path.join(self.carpeta_graficos, f"cual_{col.replace(' ', '_')}.png")
+        nombre_seguro = self._sanitizar_nombre(col)
+        ruta = os.path.join(self.carpeta_graficos, f"cual_{nombre_seguro}.png")
         plt.savefig(ruta, dpi=150, bbox_inches="tight")
         plt.close()  # libera memoria — importante en servidor
 
@@ -328,11 +334,17 @@ class AnalisisService(BaseService):
 
         plt.tight_layout()
 
-        ruta = os.path.join(self.carpeta_graficos, f"cuant_{col.replace(' ', '_')}.png")
+        nombre_seguro = self._sanitizar_nombre(col)
+        ruta = os.path.join(self.carpeta_graficos, f"cuant_{nombre_seguro}.png")
         plt.savefig(ruta, dpi=150, bbox_inches="tight")
         plt.close()
 
         return ruta
+
+    @staticmethod
+    def _sanitizar_nombre(nombre: str) -> str:
+        """Elimina caracteres no válidos para nombres de archivo en Windows."""
+        return re.sub(r'[<>:"/\\|?*\s]+', '_', nombre).strip('_')
 
     # ─── MÉTODO PRIVADO — PERSISTENCIA ───────────────────────────────────────
 
@@ -457,9 +469,11 @@ class AnalisisService(BaseService):
         # ── Interpretación de contingencia ──
         contingencia = self.resultados.get("contingencia", {})
         if contingencia:
-            col1, col2 = list(self.resultados.get("frecuencias", {}).keys())[:2]
+            col1 = contingencia.get("variable_fila", "?")
+            col2 = contingencia.get("variable_columna", "?")
+            tabla_dict = contingencia.get("tabla", {})
             total_combos = sum(
-                len(inner) for inner in contingencia.values()
+                len(inner) for inner in tabla_dict.values()
             )
             textos.append(
                 f"La tabla de contingencia entre '{col1}' y '{col2}' muestra "
@@ -609,7 +623,8 @@ class AnalisisService(BaseService):
 
         plt.tight_layout(rect=[0, 0.08, 1, 0.95])
 
-        ruta = os.path.join(self.carpeta_graficos, f"outliers_{col.replace(' ', '_')}.png")
+        nombre_seguro = self._sanitizar_nombre(col)
+        ruta = os.path.join(self.carpeta_graficos, f"outliers_{nombre_seguro}.png")
         plt.savefig(ruta, dpi=150, bbox_inches="tight")
         plt.close()
 
