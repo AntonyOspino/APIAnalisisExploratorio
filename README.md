@@ -11,7 +11,7 @@ pinned: false
 
 API REST construida con **FastAPI** + **PostgreSQL (Neon)** para ejecutar Análisis Exploratorio de Datos (EDA) sobre datasets públicos.
 
-Desplegada en **Render**: [`https://<tu-app>.onrender.com`](#) — Documentación Swagger en `/docs`
+Desplegada localmente o en tu proveedor Cloud favorito — Documentación Swagger en `/docs`
 
 ## Requisitos
 
@@ -27,18 +27,15 @@ uvicorn app.main:app --reload --port 8000
 
 La documentación interactiva (Swagger) estará disponible en: `http://127.0.0.1:8000/docs`
 
-## Despliegue en Render
+## Despliegue en Cloud (Ej. Google Cloud Run, Instancia VM)
 
-1. Crear un **Web Service** en [render.com](https://render.com) conectado al repositorio.
-2. Configurar las variables de entorno en el dashboard de Render:
-   - `DATABASE_URL` — URL de conexión a Neon
+1. Asegúrate de configurar las variables de entorno en el entorno de despliegue:
+   - `DATABASE_URL` — URL de conexión a Neon (PostgreSQL)
    - `SMTP_EMAIL` — Correo para envío de informes
    - `SMTP_PASSWORD` — Contraseña de aplicación
-3. Render usará automáticamente el archivo `render.yaml` o la configuración manual:
-   - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-
-> El archivo `render.yaml` ya está incluido en el repositorio para despliegue automático.
+2. Construir y ejecutar la imagen Docker:
+   - `docker build -t api-eda .`
+   - `docker run -p 8000:8000 -e DATABASE_URL='...' -e SMTP_EMAIL='...' -e SMTP_PASSWORD='...' api-eda`
 
 ---
 
@@ -542,7 +539,6 @@ app/
     └── correo_service.py    # Envío de PDF por correo (SMTP + HTML)
 graficos/                # PNGs generados por el análisis
 Informes/                # PDFs generados
-render.yaml              # Configuración de despliegue en Render
 ```
 
 ## Variables de entorno (`.env`)
@@ -554,8 +550,6 @@ SMTP_PASSWORD=xxxx xxxx xxxx xxxx
 SMTP_HOST=smtp.gmail.com        # opcional, default: smtp.gmail.com
 SMTP_PORT=587                   # opcional, default: 587
 ```
-
-> En Render, estas variables se configuran en **Environment → Environment Variables** del dashboard.
 
 ## Dataset de prueba
 

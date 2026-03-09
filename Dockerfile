@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 
-# HF Spaces ejecuta como usuario 1000
+# Ejecutar como usuario sin privilegios por seguridad
 RUN useradd -m -u 1000 appuser
 
 WORKDIR /app
@@ -15,6 +15,6 @@ RUN mkdir -p graficos Informes && chown -R appuser:appuser /app
 
 USER appuser
 
-EXPOSE 7860
+EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

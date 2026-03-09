@@ -11,3 +11,4 @@ test_final.py
 test_all_changes.py
 test_endpoints.py
 test_no_contingencia.py
+test_regression.py

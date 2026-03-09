@@ -644,20 +644,32 @@ class PdfService(BaseService):
         var_columna = contingencia.get("variable_columna", "")
 
         # Reconstruir la tabla cruzada desde el dict
-        col2_vals = list(tabla_dict.keys())
-        col1_vals = set()
+        col2_vals_all = list(tabla_dict.keys())
+        col1_vals_all = set()
         for inner in tabla_dict.values():
-            col1_vals.update(inner.keys())
-        col1_vals = sorted(col1_vals, key=str)
+            col1_vals_all.update(inner.keys())
+        col1_vals_all = sorted(col1_vals_all, key=str)
 
-        # Calcular anchos dinámicos
-        n_cols = len(col2_vals) + 1
+        # Límites para evitar overflow en Reportlab cuando hay muchas categorías
+        MAX_COLS = 12
+        MAX_ROWS = 20
+        col2_vals = col2_vals_all[:MAX_COLS]
+        col1_vals = col1_vals_all[:MAX_ROWS]
+        fue_truncada = len(col2_vals_all) > MAX_COLS or len(col1_vals_all) > MAX_ROWS
+
+        # Calcular anchos dinámicos con mínimo por columna
         ancho_disponible = 6.5 * inch
         ancho_primera = max(1.2 * inch, ancho_disponible * 0.22)
-        ancho_resto = (ancho_disponible - ancho_primera) / max(len(col2_vals), 1)
+        ancho_restante = ancho_disponible - ancho_primera
+        ancho_resto = max(0.35 * inch, ancho_restante / max(len(col2_vals), 1))
+        # Recalcular primera columna si hay overflow
+        total_width = ancho_primera + ancho_resto * len(col2_vals)
+        if total_width > ancho_disponible:
+            ancho_primera = ancho_disponible - ancho_resto * len(col2_vals)
+            ancho_primera = max(0.6 * inch, ancho_primera)
         col_widths = [ancho_primera] + [ancho_resto] * len(col2_vals)
 
-        # Encabezado con nombre de variable en la primera celda (wrapping para textos largos)
+        # Encabezado
         header_style = self._styles["CeldaTablaHeader"]
         cell_style = self._styles["CeldaTabla"]
 
@@ -703,9 +715,20 @@ class PdfService(BaseService):
         ]))
         tabla.repeatRows = 1
         elems.append(subtitulo)
+
+        if fue_truncada:
+            elems.append(Paragraph(
+                f"<i>Nota: La tabla muestra las primeras {MAX_COLS} categorías de '{var_columna}' "
+                f"y los primeros {MAX_ROWS} valores de '{var_fila}' ({len(col2_vals_all)} y "
+                f"{len(col1_vals_all)} en total respectivamente).</i>",
+                self._styles["TextoPequeno"]
+            ))
+            elems.append(Spacer(1, 4))
+
         elems.append(tabla)
         elems.append(Spacer(1, 10))
         return elems
+
 
     def _seccion_graficos(self, rutas_graficos: list) -> list:
         """Sección con todos los gráficos generados."""
